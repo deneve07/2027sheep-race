@@ -1,0 +1,291 @@
+import streamlit as st
+import random
+import time
+import threading
+from streamlit_autorefresh import st_autorefresh
+
+st.set_page_config(page_title="2027年生達年會 羊年大賽跑", page_icon="🐑", layout="wide")
+
+SHEEP_COUNT = 6
+TAPS_TO_FINISH = 60
+BLESSINGS = [
+    "三陽開泰迎新歲，福祿雙全樂逍遙",
+    "羊年旺旺來，事業步步高升",
+    "金羊送福到，好運連連一整年",
+    "喜氣洋洋迎丁未，闔家平安福滿盈",
+    "羊年行大運，鴻圖大展創新猷",
+    "羊羊得意展宏圖，年年有餘萬事興",
+]
+
+# ---------------------------------------------------------------
+# Shared state across ALL browser sessions (same server process).
+# st.cache_resource returns the SAME object to every user/session.
+# ---------------------------------------------------------------
+@st.cache_resource
+def get_shared_state():
+    return {
+        "lock": threading.Lock(),
+        "pin": None,
+        "claims": [None] * SHEEP_COUNT,   # {"unit":.., "name":..}
+        "phase": "claiming",              # claiming | racing | finished
+        "progress": [0] * SHEEP_COUNT,
+        "round": 1,
+        "winner_idx": None,
+        "blessing": "",
+    }
+
+state = get_shared_state()
+
+
+def new_pin():
+    return str(random.randint(1000, 9999))
+
+
+# =================================================================
+# CSS — festive red/gold banquet theme
+# =================================================================
+st.markdown("""
+<style>
+.stApp{
+    background:
+      radial-gradient(circle at 20% 0%, rgba(143,31,31,0.5), transparent 55%),
+      radial-gradient(circle at 85% 15%, rgba(200,138,58,0.22), transparent 50%),
+      #1c1210;
+    color:#f7ecd2;
+}
+h1,h2,h3{color:#ffd166 !important;}
+.pen-box{
+    background:linear-gradient(160deg,#331c14,#26170f);border:1px solid #c98a3a;
+    border-radius:14px;padding:16px;text-align:center;margin-bottom:10px;
+}
+.pen-empty{color:#6b5a48;}
+.lane-box{
+    background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
+    border-radius:14px;padding:10px 18px;margin-bottom:12px;
+}
+.lane-fill{
+    background:linear-gradient(90deg,#e8b34d,#ffd166);height:26px;border-radius:13px;
+}
+.winner-box{
+    text-align:center;background:radial-gradient(circle at center, rgba(143,31,31,0.96), rgba(20,10,8,0.98));
+    border-radius:20px;padding:50px 20px;border:2px solid #ffd166;
+}
+.big-tap button{
+    width:100%; height:260px; font-size:26px !important; font-weight:900;
+    border-radius:24px !important; background:radial-gradient(circle at 35% 30%, #ffd166, #e8b34d 70%) !important;
+    color:#3a1f0d !important; border:none !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+# =================================================================
+# ROLE ROUTING (query param ?role=display / ?role=control)
+# =================================================================
+role = st.query_params.get("role", None)
+
+if role is None:
+    st.markdown("<div class='eventname'>2027年生達年會</div>", unsafe_allow_html=True)
+    st.title("🐑 羊年大賽跑")
+    st.caption("喝完一瓶啤酒，狂點手機衝第一")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader("🖥️ 大螢幕主控")
+        st.write("投影用，顯示認領情況、賽跑畫面與得獎公告")
+        if st.button("進入大螢幕主控", use_container_width=True):
+            st.query_params["role"] = "display"
+            st.rerun()
+    with c2:
+        st.subheader("📱 我要認領羊隻")
+        st.write("參賽者手機用，認領一隻羊後狂點畫面衝刺")
+        if st.button("進入認領畫面", use_container_width=True):
+            st.query_params["role"] = "control"
+            st.rerun()
+    st.stop()
+
+
+# =================================================================
+# DISPLAY (main screen)
+# =================================================================
+if role == "display":
+    st_autorefresh(interval=500, key="display_refresh")
+
+    st.title("🐑 羊年大賽跑 · 大螢幕")
+    st.caption(f"第 {state['round']} 輪　|　目前階段：" +
+               {"claiming": "認領中", "racing": "比賽中", "finished": "本輪結束"}[state["phase"]])
+
+    with st.expander("⚙️ 主控台設定", expanded=(state["phase"] == "claiming")):
+        colA, colB, colC, colD = st.columns(4)
+        with colA:
+            if st.button("產生 / 重設通關密碼"):
+                with state["lock"]:
+                    state["pin"] = new_pin()
+        with colB:
+            can_start = state["phase"] == "claiming" and any(state["claims"])
+            if st.button("開始比賽", disabled=not can_start):
+                with state["lock"]:
+                    state["progress"] = [0] * SHEEP_COUNT
+                    state["phase"] = "racing"
+                    state["winner_idx"] = None
+        with colC:
+            if st.button("開始下一輪"):
+                with state["lock"]:
+                    state["round"] += 1
+                    state["claims"] = [None] * SHEEP_COUNT
+                    state["progress"] = [0] * SHEEP_COUNT
+                    state["phase"] = "claiming"
+                    state["winner_idx"] = None
+        with colD:
+            st.write("")
+
+        if state["pin"] is None:
+            with state["lock"]:
+                state["pin"] = new_pin()
+        st.success(f"通關密碼：**{state['pin']}**（口頭告知參賽者，不要投影出去）")
+
+        control_url = "把這個 App 的網址 + `?role=control` 給參賽者（或用手機另外掃你自訂的 QR Code）"
+        st.info(control_url)
+
+    if state["phase"] == "finished" and state["winner_idx"] is not None:
+        w = state["claims"][state["winner_idx"]]
+        name = w["name"] if w else f"第{state['winner_idx']+1}隻羊"
+        unit = w["unit"] if w else ""
+        st.balloons()
+        st.markdown(f"""
+        <div class="winner-box">
+          <div style="font-size:20px;color:#e8b34d;letter-spacing:6px;">丁未羊年 · 賽跑冠軍</div>
+          <div style="font-size:80px;margin:10px 0;">🐑🏆</div>
+          <div style="font-size:18px;color:#e0c69a;">{unit}</div>
+          <div style="font-size:56px;font-weight:900;color:#ffd166;margin-bottom:16px;">{name}</div>
+          <div style="font-size:30px;font-weight:800;">{state['blessing']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    elif state["phase"] == "claiming":
+        cols = st.columns(SHEEP_COUNT)
+        for i in range(SHEEP_COUNT):
+            c = state["claims"][i]
+            with cols[i]:
+                if c:
+                    st.markdown(f"""<div class="pen-box">🐑<br><b>{c['name']}</b><br>
+                                 <span style="font-size:12px;color:#b39a72;">{c['unit']}</span></div>""",
+                                unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""<div class="pen-box pen-empty">🐑<br>{i+1} 號羊<br>尚未認領</div>""",
+                                unsafe_allow_html=True)
+
+    else:  # racing
+        for i in range(SHEEP_COUNT):
+            c = state["claims"][i]
+            name = c["name"] if c else f"第{i+1}隻羊"
+            unit = c["unit"] if c else ""
+            pct = min(100, int(state["progress"][i] / TAPS_TO_FINISH * 100))
+            st.markdown(f"**{name}** <span style='color:#b39a72;font-size:12px;'>{unit}</span>", unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="lane-box">
+              <div class="lane-fill" style="width:{pct}%;"></div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # check winner
+        for i in range(SHEEP_COUNT):
+            if state["progress"][i] >= TAPS_TO_FINISH and state["phase"] == "racing":
+                with state["lock"]:
+                    if state["phase"] == "racing":
+                        state["phase"] = "finished"
+                        state["winner_idx"] = i
+                        state["blessing"] = random.choice(BLESSINGS)
+                st.rerun()
+
+
+# =================================================================
+# CONTROL (phone)
+# =================================================================
+elif role == "control":
+    st.title("🐑 羊年大賽跑 · 認領")
+
+    if "my_sheep" not in st.session_state:
+        st.session_state.my_sheep = None
+    if "pin_ok" not in st.session_state:
+        st.session_state.pin_ok = False
+    if "my_taps" not in st.session_state:
+        st.session_state.my_taps = 0
+
+    # --- PIN gate ---
+    if not st.session_state.pin_ok:
+        st.write("請輸入通關密碼：")
+        pin_try = st.text_input("通關密碼", max_chars=4, label_visibility="collapsed")
+        if st.button("確認密碼", use_container_width=True):
+            if state["pin"] and pin_try.strip() == state["pin"]:
+                st.session_state.pin_ok = True
+                st.rerun()
+            else:
+                st.error("密碼錯誤，請向主控台人員確認")
+        st.stop()
+
+    st_autorefresh(interval=700, key="control_refresh")
+
+    # --- pick a sheep ---
+    if st.session_state.my_sheep is None:
+        if state["phase"] != "claiming":
+            st.warning("目前不是認領階段，請等待下一輪開放")
+            st.stop()
+        st.write("選擇你要認領的羊：")
+        for i in range(SHEEP_COUNT):
+            c = state["claims"][i]
+            label = f"🐑 {i+1} 號羊" + (f"（已被 {c['name']} 認領）" if c else "（尚未認領）")
+            if st.button(label, disabled=bool(c), use_container_width=True, key=f"pick_{i}"):
+                st.session_state.picking = i
+                st.rerun()
+
+        if "picking" in st.session_state:
+            i = st.session_state.picking
+            st.markdown("---")
+            st.write(f"認領 **{i+1} 號羊**")
+            unit = st.text_input("單位", key="unit_in")
+            name = st.text_input("姓名", key="name_in")
+            if st.button("確認認領", use_container_width=True):
+                if not name.strip():
+                    st.error("請輸入姓名")
+                else:
+                    with state["lock"]:
+                        if state["claims"][i] is None:
+                            state["claims"][i] = {"unit": unit.strip(), "name": name.strip()}
+                            st.session_state.my_sheep = i
+                            del st.session_state["picking"]
+                            st.rerun()
+                        else:
+                            st.error("這隻羊剛被別人認領走了，請重新選擇")
+                            del st.session_state["picking"]
+                            st.rerun()
+        st.stop()
+
+    # --- waiting for race to start ---
+    my_i = st.session_state.my_sheep
+    my_c = state["claims"][my_i]
+
+    if state["phase"] == "claiming":
+        st.info(f"你認領了 🐑 {my_i+1} 號羊（{my_c['name']}），等待主控台開始比賽…")
+        st.stop()
+
+    elif state["phase"] == "racing":
+        st.subheader(f"🐑 {my_i+1} 號羊 · {my_c['name']}")
+        st.markdown('<div class="big-tap">', unsafe_allow_html=True)
+        if st.button("狂點衝刺！", use_container_width=True, key="tapbtn"):
+            with state["lock"]:
+                state["progress"][my_i] += 1
+                st.session_state.my_taps += 1
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.write(f"已點擊 **{st.session_state.my_taps}** 下")
+        pct = min(100, int(state["progress"][my_i] / TAPS_TO_FINISH * 100))
+        st.progress(pct / 100)
+
+    elif state["phase"] == "finished":
+        if state["winner_idx"] == my_i:
+            st.success("🏆 恭喜你第一名！請看大螢幕公布結果！")
+        else:
+            st.info("比賽結束，請看大螢幕公布結果！")
+        if st.button("準備參加下一輪"):
+            st.session_state.my_sheep = None
+            st.session_state.my_taps = 0
+            st.rerun()
