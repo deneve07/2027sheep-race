@@ -8,6 +8,11 @@ from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="2027年生達年會 羊年大賽跑", page_icon="🐑", layout="wide")
 
+# ⚠️ 部署到 Streamlit Cloud 拿到網址後，把它填在這裡並重新部署一次，
+#    現場就不用再手動貼網址了。例如：
+#    BASE_URL = "https://sheep-race-xxxx.streamlit.app"
+BASE_URL = "https://2027sheep-race-vxezm7iwzzxxsdcm2fjkgo.streamlit.app/"
+
 SHEEP_COUNT = 6
 TAPS_TO_FINISH = 60
 BLESSINGS = [
@@ -31,7 +36,7 @@ def get_shared_state():
         "round": 1,
         "winner_idx": None,
         "blessing": "",
-        "base_url": "",
+        "base_url": BASE_URL,
     }
 
 
@@ -79,6 +84,32 @@ h1,h2,h3{color:#ffd166 !important;}
     background:#331c14;border:1px solid #c98a3a;border-radius:12px;padding:14px;text-align:center;
 }
 .qr-card img{background:#fff;padding:8px;border-radius:8px;}
+
+/* ---- contrast fixes for dark theme ---- */
+div[data-testid="stWidgetLabel"] p, div[data-testid="stWidgetLabel"] label{
+    color:#f7ecd2 !important; font-weight:600;
+}
+div[data-testid="stCaptionContainer"] p, .stCaption, small{
+    color:#d8b98a !important;
+}
+.stTextInput input, .stNumberInput input{
+    color:#f7ecd2 !important;
+    background:#26170f !important;
+    border:1px solid #c98a3a !important;
+}
+.stTextInput input::placeholder{
+    color:#8a7355 !important;
+    opacity:1 !important;
+}
+.stMarkdown p, .stMarkdown li, .stApp p{
+    color:#f7ecd2;
+}
+div[data-testid="stExpander"] summary p{
+    color:#ffd166 !important; font-weight:700;
+}
+.stAlert p{
+    color:#1c1210 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -132,14 +163,17 @@ if role == "display":
             go_home()
 
     with st.expander("⚙️ 主控台：設定參賽者名單", expanded=(state["phase"] == "claiming")):
-        base_url = st.text_input(
-            "這個網站的公開網址（貼一次即可，用來產生 QR Code）",
-            value=state["base_url"],
-            placeholder="例：https://sheep-race-xxxx.streamlit.app"
-        )
-        if base_url != state["base_url"]:
-            with state["lock"]:
-                state["base_url"] = base_url.strip()
+        if BASE_URL:
+            st.caption(f"目前網址：{state['base_url']}")
+        else:
+            base_url = st.text_input(
+                "這個網站的公開網址（貼一次即可，用來產生 QR Code；建議改在程式碼 BASE_URL 直接寫死，現場就不用貼）",
+                value=state["base_url"],
+                placeholder="例：https://sheep-race-xxxx.streamlit.app"
+            )
+            if base_url != state["base_url"]:
+                with state["lock"]:
+                    state["base_url"] = base_url.strip()
 
         st.write("**輸入 6 位參賽者的單位與姓名：**")
         cols = st.columns(3)
@@ -203,7 +237,7 @@ if role == "display":
                     </div>
                     """, unsafe_allow_html=True)
         elif any(state["claims"]) and not state["base_url"]:
-            st.warning("https://2027sheep-race-vxezm7iwzzxxsdcm2fjkgo.streamlit.app/?role=control")
+            st.warning("請先在上方貼入這個網站的公開網址，才能產生 QR Code")
 
     if state["phase"] == "finished" and state["winner_idx"] is not None:
         w = state["claims"][state["winner_idx"]]
