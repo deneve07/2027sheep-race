@@ -14,6 +14,7 @@ st.set_page_config(page_title="2027年生達年會 羊年大賽跑", page_icon="
 BASE_URL = "https://2027sheep-race-vxezm7iwzzxxsdcm2fjkgo.streamlit.app/"
 
 SHEEP_COUNT = 6
+ROUND_COUNT = 4          # 預先產生幾輪的 QR Code
 TAPS_TO_FINISH = 60
 BLESSINGS = [
     "三陽開泰迎新歲，福祿雙全樂逍遙",
@@ -54,61 +55,94 @@ def qr_image_base64(url: str) -> str:
     return base64.b64encode(buf.getvalue()).decode()
 
 
+# =================================================================
+# CSS — 尾牙夜店喜氣風：更亮、更有霓虹感
+# =================================================================
 st.markdown("""
 <style>
+@keyframes glow {
+  0%,100% { text-shadow: 0 0 18px rgba(255,209,102,0.55), 0 0 40px rgba(255,80,160,0.25); }
+  50%     { text-shadow: 0 0 30px rgba(255,209,102,0.9), 0 0 60px rgba(255,80,160,0.5); }
+}
 .stApp{
     background:
-      radial-gradient(circle at 20% 0%, rgba(143,31,31,0.5), transparent 55%),
-      radial-gradient(circle at 85% 15%, rgba(200,138,58,0.22), transparent 50%),
-      #1c1210;
-    color:#f7ecd2;
+      radial-gradient(circle at 15% -5%, rgba(255,80,160,0.35), transparent 45%),
+      radial-gradient(circle at 90% 0%, rgba(255,196,0,0.30), transparent 45%),
+      radial-gradient(circle at 50% 100%, rgba(180,20,60,0.35), transparent 55%),
+      linear-gradient(160deg, #2b0f1c 0%, #1a0f14 60%, #120a0e 100%);
+    color:#fdf3df;
 }
-h1,h2,h3{color:#ffd166 !important;}
+h1{
+    color:#ffd166 !important;
+    animation: glow 2.4s ease-in-out infinite;
+    font-weight:900 !important;
+}
+h2,h3{color:#ffb3d9 !important; font-weight:800 !important;}
+
 .pen-box{
-    background:linear-gradient(160deg,#331c14,#26170f);border:1px solid #c98a3a;
-    border-radius:14px;padding:16px;text-align:center;margin-bottom:10px;
+    background:linear-gradient(160deg,#4a1f33,#331226);
+    border:2px solid #ff8fc7;
+    box-shadow:0 0 18px rgba(255,143,199,0.25);
+    border-radius:16px;padding:18px;text-align:center;margin-bottom:10px;
 }
-.pen-empty{color:#6b5a48;}
+.pen-empty{color:#c9a3b8; border-color:#7a4a5f;}
 .lane-box{
-    background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
+    background:rgba(255,255,255,0.08);border:1px solid rgba(255,209,102,0.35);
     border-radius:14px;padding:10px 18px;margin-bottom:12px;
 }
 .lane-fill{
-    background:linear-gradient(90deg,#e8b34d,#ffd166);height:26px;border-radius:13px;
+    background:linear-gradient(90deg,#ff8fc7,#ffd166);height:26px;border-radius:13px;
+    box-shadow:0 0 14px rgba(255,209,102,0.6);
 }
 .winner-box{
-    text-align:center;background:radial-gradient(circle at center, rgba(143,31,31,0.96), rgba(20,10,8,0.98));
-    border-radius:20px;padding:50px 20px;border:2px solid #ffd166;
+    text-align:center;
+    background:radial-gradient(circle at center, rgba(255,80,160,0.35), rgba(30,10,20,0.97));
+    border-radius:24px;padding:50px 20px;border:3px solid #ffd166;
+    box-shadow:0 0 60px rgba(255,209,102,0.4);
 }
 .qr-card{
-    background:#331c14;border:1px solid #c98a3a;border-radius:12px;padding:14px;text-align:center;
+    background:linear-gradient(160deg,#4a1f33,#331226);
+    border:2px solid #ffd166;border-radius:14px;padding:14px;text-align:center;
+    box-shadow:0 0 14px rgba(255,209,102,0.2);
 }
 .qr-card img{background:#fff;padding:8px;border-radius:8px;}
 
-/* ---- contrast fixes for dark theme ---- */
+.sheep-card{
+    background:linear-gradient(160deg,#3a1a2c,#2a1220);
+    border:1px solid #ff8fc7;border-radius:14px;padding:14px 16px;margin-bottom:14px;
+}
+.sheep-card-title{font-weight:800;color:#ffd166;font-size:15px;margin-bottom:8px;}
+
+/* ---- contrast / readability ---- */
 div[data-testid="stWidgetLabel"] p, div[data-testid="stWidgetLabel"] label{
-    color:#f7ecd2 !important; font-weight:600;
+    color:#fdf3df !important; font-weight:700;
 }
 div[data-testid="stCaptionContainer"] p, .stCaption, small{
-    color:#d8b98a !important;
+    color:#ffcfe6 !important;
 }
 .stTextInput input, .stNumberInput input{
-    color:#f7ecd2 !important;
-    background:#26170f !important;
-    border:1px solid #c98a3a !important;
+    color:#fdf3df !important;
+    background:#1f0f18 !important;
+    border:1px solid #ff8fc7 !important;
 }
 .stTextInput input::placeholder{
-    color:#8a7355 !important;
+    color:#a97b93 !important;
     opacity:1 !important;
 }
 .stMarkdown p, .stMarkdown li, .stApp p{
-    color:#f7ecd2;
+    color:#fdf3df;
+}
+div[data-testid="stExpander"]{
+    border:1px solid #ff8fc7 !important; border-radius:14px !important;
+    background:rgba(74,31,51,0.35) !important;
 }
 div[data-testid="stExpander"] summary p{
-    color:#ffd166 !important; font-weight:700;
+    color:#ffd166 !important; font-weight:800 !important; font-size:16px !important;
 }
-.stAlert p{
-    color:#1c1210 !important;
+.stAlert p{ color:#1c1210 !important; }
+.stButton button{
+    border-radius:10px !important; font-weight:800 !important;
+    border:1px solid #ffd166 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -123,25 +157,26 @@ def go_home():
 
 role = st.query_params.get("role", None)
 p_param = st.query_params.get("p", None)
+r_param = st.query_params.get("r", None)
 
 # =================================================================
 # HOME
 # =================================================================
 if role is None:
-    st.markdown("<div class='eventname'>2027年生達年會</div>", unsafe_allow_html=True)
+    st.markdown("<div style='color:#ffb3d9;letter-spacing:6px;'>2027年生達年會</div>", unsafe_allow_html=True)
     st.title("🐑 羊年大賽跑")
     st.caption("喝完一瓶啤酒，狂點手機衝第一")
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("🖥️ 大螢幕主控")
-        st.write("投影用，設定參賽者名單、產生 QR Code、顯示賽跑畫面與得獎公告")
+        st.write("投影用，設定當輪參賽者姓名、顯示賽跑畫面與得獎公告")
         if st.button("進入大螢幕主控", use_container_width=True):
             st.query_params["role"] = "display"
             st.rerun()
     with c2:
         st.subheader("📱 參賽者掃碼進入")
-        st.write("請用主控台產生的專屬 QR Code 掃碼進入，不要直接手動進這裡")
-        if st.button("（測試用）手動進入認領畫面", use_container_width=True):
+        st.write("請用現場發放的 QR Code 掃碼進入，不要直接手動進這裡")
+        if st.button("（測試用）手動進入", use_container_width=True):
             st.query_params["role"] = "control"
             st.rerun()
     st.stop()
@@ -162,35 +197,45 @@ if role == "display":
         if st.button("← 回首頁"):
             go_home()
 
-    with st.expander("⚙️ 主控台：設定參賽者名單", expanded=(state["phase"] == "claiming")):
-        if BASE_URL:
-            st.caption(f"目前網址：{state['base_url']}")
-        else:
-            base_url = st.text_input(
-                "這個網站的公開網址（貼一次即可，用來產生 QR Code；建議改在程式碼 BASE_URL 直接寫死，現場就不用貼）",
-                value=state["base_url"],
-                placeholder="例：https://sheep-race-xxxx.streamlit.app"
-            )
-            if base_url != state["base_url"]:
-                with state["lock"]:
-                    state["base_url"] = base_url.strip()
+    if state["pin"] is None:
+        with state["lock"]:
+            state["pin"] = new_pin()
 
-        st.write("**輸入 6 位參賽者的單位與姓名：**")
-        cols = st.columns(3)
+    # ---------------- 事前列印用 QR Code（跟名單無關，可以提早印好） ----------------
+    with st.expander("🖨️ 事前列印用 QR Code（共 %d 輪 × 6 張，活動前先印好）" % ROUND_COUNT, expanded=False):
+        st.caption("每張 QR Code 已經固定對應「第幾輪、第幾號羊」，跟參賽者姓名無關，可以提早印出來，現場照輪次發給對應的人即可。")
+        st.success(f"通關密碼：**{state['pin']}**（口頭告知參賽者，不要投影出去）")
+        for r in range(1, ROUND_COUNT + 1):
+            st.markdown(f"**第 {r} 輪**")
+            qcols = st.columns(6)
+            for i in range(SHEEP_COUNT):
+                url = f"{state['base_url'].rstrip('/')}/?role=control&r={r}&p={i}"
+                img_b64 = qr_image_base64(url)
+                with qcols[i]:
+                    st.markdown(f"""
+                    <div class="qr-card">
+                      <b>{i+1} 號羊</b><br>
+                      <img src="data:image/png;base64,{img_b64}" width="110">
+                    </div>
+                    """, unsafe_allow_html=True)
+
+    # ---------------- 當輪：輸入參賽者姓名 ----------------
+    with st.expander("⚙️ 當輪參賽者：輸入單位與姓名", expanded=(state["phase"] == "claiming")):
         form_values = []
+        cols = st.columns(3)
         for i in range(SHEEP_COUNT):
+            existing = state["claims"][i]
             with cols[i % 3]:
-                existing = state["claims"][i]
-                unit = st.text_input(f"{i+1} 號羊 - 單位", value=(existing["unit"] if existing else ""), key=f"u_{i}")
-                name = st.text_input(f"{i+1} 號羊 - 姓名", value=(existing["name"] if existing else ""), key=f"n_{i}")
+                st.markdown(f'<div class="sheep-card"><div class="sheep-card-title">🐑 {i+1} 號羊</div>', unsafe_allow_html=True)
+                unit = st.text_input("單位", value=(existing["unit"] if existing else ""), key=f"u_{i}", placeholder="例：業務部")
+                name = st.text_input("姓名", value=(existing["name"] if existing else ""), key=f"n_{i}", placeholder="姓名")
+                st.markdown('</div>', unsafe_allow_html=True)
                 form_values.append((unit.strip(), name.strip()))
 
         colA, colB, colC = st.columns(3)
         with colA:
-            if st.button("✅ 設定名單並產生 QR Code", use_container_width=True):
+            if st.button("✅ 套用本輪名單", use_container_width=True):
                 with state["lock"]:
-                    if not state["pin"]:
-                        state["pin"] = new_pin()
                     new_claims = []
                     for unit, name in form_values:
                         new_claims.append({"unit": unit, "name": name} if name else None)
@@ -206,38 +251,12 @@ if role == "display":
         with colC:
             if st.button("🔁 開始下一輪", use_container_width=True):
                 with state["lock"]:
-                    state["round"] += 1
+                    state["round"] = state["round"] + 1 if state["round"] < ROUND_COUNT else 1
                     state["claims"] = [None] * SHEEP_COUNT
                     state["progress"] = [0] * SHEEP_COUNT
                     state["phase"] = "claiming"
                     state["winner_idx"] = None
-
-        if state["pin"] is None:
-            with state["lock"]:
-                state["pin"] = new_pin()
-        st.success(f"通關密碼：**{state['pin']}**（口頭告知參賽者，不要投影出去）")
-
-        if any(state["claims"]) and state["base_url"]:
-            st.markdown("---")
-            st.write("**參賽者專屬 QR Code：**")
-            qcols = st.columns(3)
-            for i in range(SHEEP_COUNT):
-                c = state["claims"][i]
-                if not c:
-                    continue
-                url = f"{state['base_url'].rstrip('/')}/?role=control&p={i}"
-                img_b64 = qr_image_base64(url)
-                with qcols[i % 3]:
-                    st.markdown(f"""
-                    <div class="qr-card">
-                      <b>{c['name']}</b><br>
-                      <span style="font-size:12px;color:#b39a72;">{c['unit']}</span><br>
-                      <img src="data:image/png;base64,{img_b64}" width="150"><br>
-                      <span style="font-size:10px;color:#8a7355;word-break:break-all;">{url}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-        elif any(state["claims"]) and not state["base_url"]:
-            st.warning("請先在上方貼入這個網站的公開網址，才能產生 QR Code")
+                st.rerun()
 
     if state["phase"] == "finished" and state["winner_idx"] is not None:
         w = state["claims"][state["winner_idx"]]
@@ -246,11 +265,11 @@ if role == "display":
         st.balloons()
         st.markdown(f"""
         <div class="winner-box">
-          <div style="font-size:20px;color:#e8b34d;letter-spacing:6px;">丁未羊年 · 賽跑冠軍</div>
+          <div style="font-size:20px;color:#ffb3d9;letter-spacing:6px;">丁未羊年 · 賽跑冠軍</div>
           <div style="font-size:80px;margin:10px 0;">🐑🏆</div>
-          <div style="font-size:18px;color:#e0c69a;">{unit}</div>
+          <div style="font-size:18px;color:#ffe0f0;">{unit}</div>
           <div style="font-size:56px;font-weight:900;color:#ffd166;margin-bottom:16px;">{name}</div>
-          <div style="font-size:30px;font-weight:800;">{state['blessing']}</div>
+          <div style="font-size:30px;font-weight:800;color:#fdf3df;">{state['blessing']}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -261,7 +280,7 @@ if role == "display":
             with cols[i]:
                 if c:
                     st.markdown(f"""<div class="pen-box">🐑<br><b>{c['name']}</b><br>
-                                 <span style="font-size:12px;color:#b39a72;">{c['unit']}</span></div>""",
+                                 <span style="font-size:12px;color:#ffcfe6;">{c['unit']}</span></div>""",
                                 unsafe_allow_html=True)
                 else:
                     st.markdown(f"""<div class="pen-box pen-empty">🐑<br>{i+1} 號羊<br>尚未設定</div>""",
@@ -275,7 +294,7 @@ if role == "display":
             name = c["name"]
             unit = c["unit"]
             pct = min(100, int(state["progress"][i] / TAPS_TO_FINISH * 100))
-            st.markdown(f"**{name}** <span style='color:#b39a72;font-size:12px;'>{unit}</span>", unsafe_allow_html=True)
+            st.markdown(f"**{name}** <span style='color:#ffcfe6;font-size:12px;'>{unit}</span>", unsafe_allow_html=True)
             st.markdown(f"""
             <div class="lane-box">
               <div class="lane-fill" style="width:{pct}%;"></div>
@@ -308,15 +327,6 @@ elif role == "control":
     if "my_taps" not in st.session_state:
         st.session_state.my_taps = 0
 
-    my_i = None
-    if p_param is not None:
-        try:
-            idx = int(p_param)
-            if 0 <= idx < SHEEP_COUNT and state["claims"][idx]:
-                my_i = idx
-        except ValueError:
-            pass
-
     if not st.session_state.pin_ok:
         st.write("請輸入通關密碼：")
         pin_try = st.text_input("通關密碼", max_chars=4, label_visibility="collapsed")
@@ -330,11 +340,34 @@ elif role == "control":
 
     st_autorefresh(interval=700, key="control_refresh")
 
+    my_i = None
+    if p_param is not None:
+        try:
+            idx = int(p_param)
+            if 0 <= idx < SHEEP_COUNT:
+                my_i = idx
+        except ValueError:
+            pass
+
+    my_round = None
+    if r_param is not None:
+        try:
+            my_round = int(r_param)
+        except ValueError:
+            pass
+
     if my_i is None:
-        st.warning("這組連結沒有對應到有效的參賽者，請重新掃描主控台提供的 QR Code，或回首頁手動操作。")
+        st.warning("這組連結沒有對應到有效的號碼牌，請確認掃到正確的 QR Code，或回首頁手動操作。")
+        st.stop()
+
+    if my_round is not None and my_round != state["round"]:
+        st.info(f"你的號碼牌是第 {my_round} 輪，目前是第 {state['round']} 輪，請稍候輪到你時再操作 🙏")
         st.stop()
 
     my_c = state["claims"][my_i]
+    if not my_c:
+        st.info(f"你是 🐑 {my_i+1} 號羊，主控台尚未輸入你的姓名，請稍候…")
+        st.stop()
 
     if state["phase"] == "claiming":
         st.info(f"你是 🐑 {my_i+1} 號羊 · {my_c['name']}（{my_c['unit']}），等待主控台開始比賽…")
@@ -354,4 +387,4 @@ elif role == "control":
             st.success("🏆 恭喜你第一名！請看大螢幕公布結果！")
         else:
             st.info("比賽結束，請看大螢幕公布結果！")
-        st.caption("下一輪開始前，主控台會重新設定名單並產生新的 QR Code，請等候新的連結。")
+        st.caption("下一輪開始前，請等候工作人員發下一輪的號碼牌 QR Code。")
