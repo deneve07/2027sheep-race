@@ -30,7 +30,6 @@ BLESSINGS = [
 def get_shared_state():
     return {
         "lock": threading.Lock(),
-        "pin": None,
         "claims": [None] * SHEEP_COUNT,   # {"unit":.., "name":..}
         "phase": "claiming",              # claiming | racing | finished
         "progress": [0] * SHEEP_COUNT,
@@ -44,10 +43,7 @@ def get_shared_state():
 state = get_shared_state()
 
 
-def new_pin():
-    return str(random.randint(1000, 9999))
-
-
+@st.cache_data(show_spinner=False)
 def qr_image_base64(url: str) -> str:
     img = qrcode.make(url)
     buf = io.BytesIO()
@@ -55,8 +51,17 @@ def qr_image_base64(url: str) -> str:
     return base64.b64encode(buf.getvalue()).decode()
 
 
+def clear_roster_inputs():
+    """真正清空表單輸入框（不只是清 state，連 widget 記住的舊值也一起刪掉）"""
+    for i in range(SHEEP_COUNT):
+        for prefix in ("u_", "n_"):
+            key = f"{prefix}{i}"
+            if key in st.session_state:
+                del st.session_state[key]
+
+
 # =================================================================
-# CSS — 可愛喜氣派對風：淺色背景、深色文字，對比清楚
+# CSS — 可愛喜氣派對風
 # =================================================================
 st.markdown("""
 <style>
@@ -78,37 +83,21 @@ h1{
 h2,h3{color:#c2185b !important; font-weight:800 !important;}
 
 .pen-box{
-    background:#ffffff;
-    border:3px solid #ff8fa3;
+    background:#ffffff;border:3px solid #ff8fa3;
     box-shadow:0 6px 14px rgba(224,41,63,0.12);
     border-radius:20px;padding:18px;text-align:center;margin-bottom:10px;
     font-size:1.05rem;
 }
 .pen-empty{color:#c79a86; border-color:#ffd9a8; background:#fffaf2;}
-.lane-box{
-    background:#fff3d6;border:2px solid #ffb74d;
-    border-radius:16px;padding:10px 18px;margin-bottom:14px;
-}
-.lane-fill{
-    background:linear-gradient(90deg,#ff8fa3,#ffca28);height:30px;border-radius:15px;
-    box-shadow:0 2px 6px rgba(255,143,163,0.5);
-}
-.winner-box{
-    text-align:center;
-    background:linear-gradient(160deg,#fff0f5,#ffe9c2);
-    border-radius:26px;padding:50px 20px;border:4px solid #ff6f91;
-    box-shadow:0 12px 30px rgba(224,41,63,0.2);
-}
+
 .qr-card{
-    background:#ffffff;
-    border:2px solid #ffb74d;border-radius:16px;padding:14px;text-align:center;
+    background:#ffffff;border:2px solid #ffb74d;border-radius:16px;padding:14px;text-align:center;
     box-shadow:0 4px 10px rgba(0,0,0,0.06);
 }
 .qr-card img{border-radius:8px;}
 
 .sheep-card{
-    background:#fffaf2;
-    border:2px solid #ffb3c6;border-radius:18px;padding:16px 18px;margin-bottom:16px;
+    background:#fffaf2;border:2px solid #ffb3c6;border-radius:18px;padding:16px 18px;margin-bottom:16px;
 }
 .sheep-card-title{font-weight:900;color:#d81b60;font-size:1.2rem;margin-bottom:8px;}
 
@@ -116,23 +105,13 @@ h2,h3{color:#c2185b !important; font-weight:800 !important;}
 div[data-testid="stWidgetLabel"] p, div[data-testid="stWidgetLabel"] label{
     color:#7a3b1f !important; font-weight:700 !important; font-size:1rem !important;
 }
-div[data-testid="stCaptionContainer"] p, .stCaption, small{
-    color:#a15a3a !important;
-}
+div[data-testid="stCaptionContainer"] p, .stCaption, small{ color:#a15a3a !important; }
 .stTextInput input, .stNumberInput input{
-    color:#3a1f0d !important;
-    background:#ffffff !important;
-    border:2px solid #ffb3c6 !important;
-    font-size:1.1rem !important;
-    border-radius:10px !important;
+    color:#3a1f0d !important; background:#ffffff !important;
+    border:2px solid #ffb3c6 !important; font-size:1.1rem !important; border-radius:10px !important;
 }
-.stTextInput input::placeholder{
-    color:#c79a86 !important;
-    opacity:1 !important;
-}
-.stMarkdown p, .stMarkdown li, .stApp p{
-    color:#3a1f0d;
-}
+.stTextInput input::placeholder{ color:#c79a86 !important; opacity:1 !important; }
+.stMarkdown p, .stMarkdown li, .stApp p{ color:#3a1f0d; }
 div[data-testid="stExpander"]{
     border:2px solid #ffb3c6 !important; border-radius:18px !important;
     background:rgba(255,255,255,0.6) !important;
@@ -147,18 +126,84 @@ div[data-testid="stExpander"] summary p{
     padding:0.6rem 1rem !important;
 }
 
+/* ---- 狂點按鈕：特別放大 ---- */
+.st-key-tapbtn button{
+    font-size:2rem !important;
+    padding:2rem 1rem !important;
+    border-radius:26px !important;
+    background:linear-gradient(160deg,#ffd166,#ff8fa3) !important;
+    color:#7a0e1f !important;
+    border:4px solid #e0293f !important;
+    box-shadow:0 8px 0 #b3223a, 0 12px 24px rgba(0,0,0,0.25) !important;
+}
+.st-key-tapbtn button:active{
+    box-shadow:0 2px 0 #b3223a, 0 4px 10px rgba(0,0,0,0.2) !important;
+}
+
 /* ---- big text helpers for phone screens ---- */
 .big-msg{
-    font-size:1.6rem; font-weight:800; color:#c2185b; text-align:center;
-    background:#fff; border:3px solid #ffb3c6; border-radius:18px; padding:22px 16px; line-height:1.5;
+    font-size:1.7rem; font-weight:800; color:#c2185b; text-align:center;
+    background:#fff; border:3px solid #ffb3c6; border-radius:18px; padding:24px 16px; line-height:1.5;
 }
 .huge-name{
-    font-size:2.1rem; font-weight:900; color:#e0293f; text-align:center; margin:10px 0;
+    font-size:2.3rem; font-weight:900; color:#e0293f; text-align:center; margin:10px 0;
 }
 .tap-count-big{
-    font-size:1.6rem; font-weight:900; color:#c2185b; text-align:center; margin-top:14px;
+    font-size:1.8rem; font-weight:900; color:#c2185b; text-align:center; margin-top:16px;
 }
-.tap-count-big b{ font-size:2.4rem; color:#e0293f; }
+.tap-count-big b{ font-size:2.8rem; color:#e0293f; }
+
+/* ---- race track: 草原 + 真的羊在跑 ---- */
+.race-lane{ margin-bottom:14px; }
+.race-lane .lane-name{ font-weight:800; font-size:1.05rem; color:#3a1f0d; margin-bottom:4px; }
+.race-lane .lane-unit{ font-weight:400; font-size:0.85rem; color:#a15a3a; margin-left:6px; }
+.grass-track{
+    position:relative; height:64px; border-radius:32px; overflow:hidden;
+    background:repeating-linear-gradient(90deg,#8bc34a 0 40px,#7cb342 40px 80px);
+    border:3px solid #558b2f;
+    box-shadow:inset 0 0 12px rgba(0,0,0,0.15);
+}
+.grass-track::before{
+    content:""; position:absolute; top:50%; left:0; right:0; height:3px;
+    background:repeating-linear-gradient(90deg, rgba(255,255,255,0.6) 0 14px, transparent 14px 30px);
+    transform:translateY(-50%);
+}
+.finish-flag{ position:absolute; right:6px; top:50%; transform:translateY(-50%); font-size:28px; z-index:2; }
+.running-sheep{
+    position:absolute; top:50%; transform:translateY(-50%); font-size:36px;
+    transition:left 0.4s ease-out;
+    animation: hop 0.5s ease-in-out infinite;
+    z-index:1;
+}
+@keyframes hop{
+  0%,100%{ transform:translateY(-50%) rotate(0deg); }
+  50%{ transform:translateY(-62%) rotate(-10deg); }
+}
+
+/* ---- winner celebration ---- */
+.winner-box{
+    text-align:center; position:relative; overflow:hidden;
+    background:linear-gradient(160deg,#fff0f5,#ffe9c2);
+    border-radius:26px; padding:50px 20px; border:4px solid #ff6f91;
+    box-shadow:0 12px 30px rgba(224,41,63,0.2);
+}
+.fireworks-row{ font-size:2.4rem; letter-spacing:14px; margin-bottom:6px; }
+.fireworks-row span{ display:inline-block; animation: pop 1s ease-in-out infinite; }
+.fireworks-row span:nth-child(2){ animation-delay:0.15s; }
+.fireworks-row span:nth-child(3){ animation-delay:0.3s; }
+.fireworks-row span:nth-child(4){ animation-delay:0.45s; }
+.fireworks-row span:nth-child(5){ animation-delay:0.6s; }
+@keyframes pop{
+  0%,100%{ transform:scale(1) rotate(0deg); opacity:0.85; }
+  50%{ transform:scale(1.3) rotate(8deg); opacity:1; }
+}
+.winner-blessing{
+    font-size:2.4rem !important; font-weight:900 !important; color:#3a1f0d !important; line-height:1.6;
+}
+.winner-name-huge{
+    font-size:4rem !important; font-weight:900; color:#e0293f; margin-bottom:16px;
+    -webkit-text-stroke: 1.5px #ffd166;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -207,19 +252,14 @@ if role == "display":
     with top_l:
         st.title("🐑 羊年大賽跑 · 大螢幕")
         st.caption(f"第 {state['round']} 輪　|　目前階段：" +
-                   {"claiming": "設定/認領中", "racing": "比賽中", "finished": "本輪結束"}[state["phase"]])
+                   {"claiming": "設定中", "racing": "比賽中", "finished": "本輪結束"}[state["phase"]])
     with top_r:
         if st.button("← 回首頁"):
             go_home()
 
-    if state["pin"] is None:
-        with state["lock"]:
-            state["pin"] = new_pin()
-
-    # ---------------- 事前列印用 QR Code ----------------
+    # ---------------- 事前列印用 QR Code（已加快取，不會拖慢畫面） ----------------
     with st.expander("🖨️ 事前列印用 QR Code（共 %d 輪 × 6 張，活動前先印好）" % ROUND_COUNT, expanded=False):
-        st.caption("每張 QR Code 已經固定對應「第幾輪、第幾號羊」，跟參賽者姓名無關，可以提早印出來，現場照輪次發給對應的人即可。")
-        st.success(f"通關密碼：**{state['pin']}**（口頭告知參賽者，不要投影出去）")
+        st.caption("每張 QR Code 固定對應「第幾輪、第幾號羊」，跟參賽者姓名無關，可以提早印出來，現場照輪次發給對應的人即可。掃碼進去不需要再輸入密碼。")
         for r in range(1, ROUND_COUNT + 1):
             st.markdown(f"**第 {r} 輪**")
             qcols = st.columns(6)
@@ -234,7 +274,7 @@ if role == "display":
                     </div>
                     """, unsafe_allow_html=True)
 
-    # ---------------- 當輪：輸入參賽者姓名（用表單，避免最後一格沒送出） ----------------
+    # ---------------- 當輪：輸入參賽者姓名 ----------------
     with st.expander("⚙️ 當輪參賽者：輸入單位與姓名", expanded=(state["phase"] == "claiming")):
         with st.form("roster_form", clear_on_submit=False):
             unit_inputs = []
@@ -259,7 +299,16 @@ if role == "display":
                     state["claims"] = new_claims
                 st.success("已套用本輪名單 ✅")
 
-        colB, colC = st.columns(2)
+        colA, colB, colC = st.columns(3)
+        with colA:
+            if st.button("🧹 清空本輪名單重填", use_container_width=True):
+                with state["lock"]:
+                    state["claims"] = [None] * SHEEP_COUNT
+                    state["progress"] = [0] * SHEEP_COUNT
+                    state["phase"] = "claiming"
+                    state["winner_idx"] = None
+                clear_roster_inputs()
+                st.rerun()
         with colB:
             can_start = state["phase"] == "claiming" and any(state["claims"])
             if st.button("▶️ 開始比賽", disabled=not can_start, use_container_width=True):
@@ -267,28 +316,35 @@ if role == "display":
                     state["progress"] = [0] * SHEEP_COUNT
                     state["phase"] = "racing"
                     state["winner_idx"] = None
+                st.rerun()
         with colC:
-            if st.button("🔁 開始下一輪", use_container_width=True):
+            if st.button("🔁 開始下一輪（換下一組 QR）", use_container_width=True):
                 with state["lock"]:
                     state["round"] = state["round"] + 1 if state["round"] < ROUND_COUNT else 1
                     state["claims"] = [None] * SHEEP_COUNT
                     state["progress"] = [0] * SHEEP_COUNT
                     state["phase"] = "claiming"
                     state["winner_idx"] = None
+                clear_roster_inputs()
                 st.rerun()
 
     if state["phase"] == "finished" and state["winner_idx"] is not None:
         w = state["claims"][state["winner_idx"]]
         name = w["name"] if w else f"第{state['winner_idx']+1}隻羊"
         unit = w["unit"] if w else ""
-        st.balloons()
         st.markdown(f"""
         <div class="winner-box">
-          <div style="font-size:1.3rem;color:#c2185b;letter-spacing:6px;font-weight:800;">丁未羊年 · 賽跑冠軍</div>
+          <div class="fireworks-row">
+            <span>🎉</span><span>🧨</span><span>✨</span><span>🧨</span><span>🎉</span>
+          </div>
+          <div style="font-size:1.4rem;color:#c2185b;letter-spacing:6px;font-weight:800;">丁未羊年 · 賽跑冠軍</div>
           <div style="font-size:5rem;margin:10px 0;">🐑🏆</div>
-          <div style="font-size:1.2rem;color:#a15a3a;">{unit}</div>
-          <div style="font-size:3.4rem;font-weight:900;color:#e0293f;margin-bottom:16px;">{name}</div>
-          <div style="font-size:1.8rem;font-weight:800;color:#3a1f0d;">{state['blessing']}</div>
+          <div style="font-size:1.3rem;color:#a15a3a;">{unit}</div>
+          <div class="winner-name-huge">{name}</div>
+          <div class="winner-blessing">{state['blessing']}</div>
+          <div class="fireworks-row" style="margin-top:14px;">
+            <span>🎊</span><span>🧨</span><span>🎆</span><span>🧨</span><span>🎊</span>
+          </div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -305,18 +361,22 @@ if role == "display":
                     st.markdown(f"""<div class="pen-box pen-empty">🐑<br>{i+1} 號羊<br>尚未設定</div>""",
                                 unsafe_allow_html=True)
 
-    else:  # racing
+    else:  # racing — 草原賽道，每隻羊各自一條路往前跑
         for i in range(SHEEP_COUNT):
             c = state["claims"][i]
             if not c:
                 continue
             name = c["name"]
             unit = c["unit"]
-            pct = min(100, int(state["progress"][i] / TAPS_TO_FINISH * 100))
-            st.markdown(f"**{name}** <span style='color:#a15a3a;font-size:0.85rem;'>{unit}</span>", unsafe_allow_html=True)
+            real_pct = min(100, state["progress"][i] / TAPS_TO_FINISH * 100)
+            show_pct = min(90, real_pct)  # 留空間讓羊在抵達終點旗前都看得到
             st.markdown(f"""
-            <div class="lane-box">
-              <div class="lane-fill" style="width:{pct}%;"></div>
+            <div class="race-lane">
+              <div class="lane-name">{name}<span class="lane-unit">{unit}</span></div>
+              <div class="grass-track">
+                <div class="finish-flag">🏁</div>
+                <div class="running-sheep" style="left:{show_pct}%;">🐑</div>
+              </div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -331,7 +391,7 @@ if role == "display":
 
 
 # =================================================================
-# CONTROL (phone)
+# CONTROL (phone) — 不需要密碼，掃到哪張 QR 就直接對應哪隻羊
 # =================================================================
 elif role == "control":
     top_l, top_r = st.columns([5, 1])
@@ -341,21 +401,8 @@ elif role == "control":
         if st.button("← 回首頁"):
             go_home()
 
-    if "pin_ok" not in st.session_state:
-        st.session_state.pin_ok = False
     if "my_taps" not in st.session_state:
         st.session_state.my_taps = 0
-
-    if not st.session_state.pin_ok:
-        st.markdown('<div class="big-msg">請輸入通關密碼</div>', unsafe_allow_html=True)
-        pin_try = st.text_input("通關密碼", max_chars=4, label_visibility="collapsed")
-        if st.button("確認密碼", use_container_width=True):
-            if state["pin"] and pin_try.strip() == state["pin"]:
-                st.session_state.pin_ok = True
-                st.rerun()
-            else:
-                st.error("密碼錯誤，請向主控台人員確認")
-        st.stop()
 
     st_autorefresh(interval=700, key="control_refresh")
 
